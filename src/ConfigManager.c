@@ -99,7 +99,7 @@ static void CFM_loadCal(char * data){
             int32_t dx = (calData[currData].sensorReading - calData[currData - 1].sensorReading);
             float dy = (calData[currData].appliedField - calData[currData - 1].appliedField);
             calData[currData-1].inclination = dy / (float) dx;
-            ESP_LOGI(TAG, "Got new calibration data: %f %d incl %f (dX = %d, dY = %f)", calData[currData-1].appliedField, calData[currData-1].sensorReading, calData[currData-1].inclination, dx, dy);
+            ESP_LOGI(TAG, "Got new calibration data: %f %ld incl %f (dX = %ld, dY = %f)", calData[currData-1].appliedField, calData[currData-1].sensorReading, calData[currData-1].inclination, dx, dy);
         }
         currData++;
 
@@ -110,7 +110,7 @@ static void CFM_loadCal(char * data){
     
     free(values);
     calDataCount = currData;
-    ESP_LOGI(TAG, "loaded %d datapoints", calDataCount);
+    ESP_LOGI(TAG, "loaded %lu datapoints", calDataCount);
 }
 
 esp_err_t CFM_init(){
@@ -127,7 +127,7 @@ esp_err_t CFM_init(){
     fseek(settings, 0, SEEK_END);
     settingsSize = ftell(settings);
     fseek(settings, 0, SEEK_SET);
-    ESP_LOGI(TAG, "found settings.json with size %d", (uint32_t) settingsSize);
+    ESP_LOGI(TAG, "found settings.json with size %lu", (uint32_t) settingsSize);
 
     if(settingsSize > 0){
         char * settingsString = malloc(settingsSize+1);
@@ -147,7 +147,7 @@ esp_err_t CFM_init(){
     fseek(cal, 0, SEEK_END);
     calSize = ftell(cal);
     fseek(cal, 0, SEEK_SET);
-    ESP_LOGI(TAG, "found cal.json with size %d", (uint32_t) calSize);
+    ESP_LOGI(TAG, "found cal.json with size %lu", (uint32_t) calSize);
 
     if(calSize > 0){
         char * calString = malloc(calSize+1);
@@ -354,7 +354,7 @@ static void CFM_saveCalFile(){
     fprintf(cf, "\t\"Datapoints\":[\r\n");
 
     for(int32_t i = 0; i < calDataCount; i ++){
-        fprintf(cf, "\t\t[%d,%f]%c\r\n", calData[i].sensorReading, calData[i].appliedField, ((i+1) < calDataCount) ? ',' : ' ');
+        fprintf(cf, "\t\t[%ld,%f]%c\r\n", calData[i].sensorReading, calData[i].appliedField, ((i+1) < calDataCount) ? ',' : ' ');
     }
 
     fprintf(cf, "\t]\r\n}");

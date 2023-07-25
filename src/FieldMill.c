@@ -31,7 +31,7 @@ static float FM_currAVGField = 0;
 
 static const char *TAG = "FieldMill";
 
-static xQueueHandle FM_Motor_ISR_queue = NULL;
+static QueueHandle_t FM_Motor_ISR_queue = NULL;
 
 char * FM_mqttTopic = NULL;
 uint32_t FM_mqttPeriod = 0;
@@ -56,7 +56,7 @@ void FM_init(){
 
     FM_loadSettings();
 
-    xQueueHandle adcQueue = ADC_init(1000);
+    QueueHandle_t adcQueue = ADC_init(1000);
     xTaskCreate(FM_valueTask, "fm value task", configMINIMAL_STACK_SIZE + 4000, adcQueue, tskIDLE_PRIORITY + 1, 0);
 
     FM_initMotorSubSystem();
@@ -65,7 +65,7 @@ void FM_init(){
 void FM_loadSettings(){
     SettingsItem * cs = CFM_getSetting("FM_targetRPM");
     if(cs != 0) FM_motorTargetRPM = atoi(cs->value);
-    if(cs != 0) ESP_LOGI(TAG, "set target RPM to %d (%s)", FM_motorTargetRPM, cs->value);
+    if(cs != 0) ESP_LOGI(TAG, "set target RPM to %lu (%s)", FM_motorTargetRPM, cs->value);
     
     cs = CFM_getSetting("FM_motorTuneP");
     if(cs != 0) FM_motorTuneP = atof(cs->value);
@@ -101,7 +101,7 @@ static int32_t scaleForMotorSpeed(int32_t value){
 }
 
 static void FM_valueTask(void * taskData){
-    xQueueHandle adcQueue = (xQueueHandle) taskData;
+    QueueHandle_t adcQueue = (QueueHandle_t) taskData;
     ADC_Sample_t currSample;
     uint16_t count = 0;
     while(1){
@@ -179,7 +179,7 @@ static void FM_motorCtrlTask(void * taskData){
 
                 if(FM_motorPower >= 100.0){
                     FM_motorPower = 100.0f;
-                    ESP_LOGW(TAG, "Motor power range exauhsted! (100%% ; error = %d rpm (is %d rpm))", error, FM_getMotorRPM());
+                    ESP_LOGW(TAG, "Motor power range exauhsted! (100%% ; error = %lu rpm (is %lu rpm))", error, FM_getMotorRPM());
                 }else if(FM_motorPower > 93.0){
                     ESP_LOGW(TAG, "Motor is getting close to its power limit! (%.2f%%)", FM_motorPower);
                 }/*else{
@@ -240,7 +240,7 @@ static void FM_initMotorSubSystem(){
     mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
     mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, 0.0);
 
-    ESP_LOGI(TAG, "motor ready! 0x%08x", (uint32_t) FM_Motor_ISR_queue);
+    ESP_LOGI(TAG, "motor ready! 0x%08lx", (uint32_t) FM_Motor_ISR_queue);
     gpio_set_direction(2, GPIO_MODE_OUTPUT);
     gpio_set_direction(5, GPIO_MODE_OUTPUT);
     gpio_set_direction(22, GPIO_MODE_OUTPUT);
@@ -251,7 +251,7 @@ static void FM_initMotorSubSystem(){
 
 static esp_err_t FM_getMeasurementHandler(httpd_req_t *req){
     char * buff = malloc(128);
-    sprintf(buff, "{\"measuredField\": %f,\r\n\"sensorReading\": %d,\r\n\"motorRPM\": %d\r\n}", FM_getField(), FM_getRaw(), FM_getMotorRPM());
+    sprintf(buff, "{\"measuredField\": %f,\r\n\"sensorReading\": %ld,\r\n\"motorRPM\": %ld\r\n}", FM_getField(), FM_getRaw(), FM_getMotorRPM());
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr_chunk(req, buff);
     free(buff);
@@ -266,7 +266,7 @@ static void FM_MQTTTask(void * param){
     char fieldChannel[512];
     sprintf(fieldChannel, "%s/reading", FM_mqttTopic);
     while(1){ 
-        uint32_t len = sprintf(buff, "{\"measuredField\": %f,\r\n\"sensorReading\": %d,\r\n\"motorRPM\": %d\r\n}", FM_getField(), FM_getRaw(), FM_getMotorRPM());
+        uint32_t len = sprintf(buff, "{\"measuredField\": %f,\r\n\"sensorReading\": %ld,\r\n\"motorRPM\": %ld\r\n}", FM_getField(), FM_getRaw(), FM_getMotorRPM());
         esp_mqtt_client_publish(client, fieldChannel, buff, len, 1, 0);
         vTaskDelay(FM_mqttPeriod / portTICK_PERIOD_MS);
     }
@@ -301,9 +301,17 @@ void FM_initMQTT(){
     char * user = CFM_getSetting("MQTT_user")->value;
     char * password = CFM_getSetting("MQTT_password")->value;
     esp_mqtt_client_config_t mqtt_cfg = {
-        .uri = bUri,
-        .username = user,
-        .password = password,
+        .broker = {
+            .address = {
+                .uri = bUri,
+            },
+        },
+        .credentials = {
+            .username = user,
+            .authentication = {
+                .password = password,
+            },
+        }
     };
 
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);

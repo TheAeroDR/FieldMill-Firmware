@@ -4,7 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
-xQueueHandle ADC_init();
+QueueHandle_t ADC_init();
 void ADC_setSampingRate(uint32_t samplingRate);
 uint16_t ADC_read();
 

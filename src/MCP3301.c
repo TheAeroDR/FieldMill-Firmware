@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "freertos/event_groups.h"
@@ -8,31 +9,37 @@
 #include "driver/timer.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
-#include "driver/timer.h"
+#include "driver/gptimer.h"
 
 #include "FieldMill.h"
 #include "MCP3301.h"
 
 static void ADC_task(void * harambe);
 
-static xQueueHandle ADC_sampleQue = NULL;
-static xQueueHandle ADC_triggerQue = NULL;
+static QueueHandle_t ADC_sampleQue = NULL;
+static QueueHandle_t ADC_triggerQue = NULL;
 static spi_device_handle_t ADC_devHandle;
 
 static const char *TAG = "ADC";
 
 unsigned state2;
-void ADC_timerISR(void *para){
-	timer_spinlock_take(TIMER_GROUP_0);
-	timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, 1);
-    timer_group_enable_alarm_in_isr(TIMER_GROUP_0, 1);
-    timer_spinlock_give(TIMER_GROUP_0);
-	BaseType_t xHigherPriorityTaskWoken;
-    xQueueSendFromISR(ADC_triggerQue, ADC_triggerQue, &xHigherPriorityTaskWoken);
-    if(xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
+SemaphoreHandle_t adcTimerMutex;
+void ADC_timerISR(void *para)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    if (xSemaphoreTakeFromISR(adcTimerMutex, &xHigherPriorityTaskWoken) == pdPASS)
+    {
+        timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, TIMER_1);
+        timer_group_enable_alarm_in_isr(TIMER_GROUP_0, TIMER_1);
+        xQueueSendFromISR(ADC_triggerQue, &ADC_triggerQue, &xHigherPriorityTaskWoken);
+        xSemaphoreGiveFromISR(adcTimerMutex, &xHigherPriorityTaskWoken);
+    }
+    if (xHigherPriorityTaskWoken)
+    {
+        portYIELD_FROM_ISR();
+    }
 }
-
-xQueueHandle ADC_init(uint32_t samplingRate){
+QueueHandle_t ADC_init(uint32_t samplingRate){
 	spi_bus_config_t buscfg={
 		.miso_io_num	=	FM_ADC_DIN_PIN,
 		.sclk_io_num	=	FM_ADC_CLK_PIN,
@@ -110,8 +117,8 @@ static void ADC_task(void * harambe){
 }
 
 void ADC_setSampingRate(uint32_t samplingRate){
-	uint32_t targetCount = TIMER_BASE_CLK / (samplingRate * 4);
-	ESP_LOGI(TAG, "target count = %d", targetCount);
+	uint32_t targetCount = APB_CLK_FREQ / (samplingRate * 4);
+	ESP_LOGI(TAG, "target count = %lu", targetCount);
     timer_set_alarm_value(TIMER_GROUP_0, 1, targetCount);
     timer_set_counter_value(TIMER_GROUP_0, 1, 0);
 }

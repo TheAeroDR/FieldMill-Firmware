@@ -1,7 +1,8 @@
 #ifndef FM_include
 #define FM_include
 #include <stdint.h>
-#include "driver/timer.h"
+#include "driver/gptimer.h"
+#include "esp_system.h"
 
 #define FM_INTERRUPTER_PIN 27
 #define FM_Motor_PIN 4
@@ -9,7 +10,7 @@
 #define FM_ADC_DIN_PIN 33
 #define FM_ADC_CS_PIN 32
 
-#define FM_CONF_DEADTIME (TIMER_BASE_CLK / 4000000) * 1500 //in 25ns increments
+#define FM_CONF_DEADTIME (APB_CLK_FREQ / 4000000) * 1500 //in 25ns increments
 #define FM_CONF_MOTORSPEED_GAIN 0.01f //1/( d(out/outN0)/(N0-))
 
 /*
